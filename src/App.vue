@@ -148,10 +148,28 @@ function onSwiperInit(inst: SwiperType) {
   })
 }
 
+function isTelegramWebApp() {
+  const w = window as any
+  const wa = w.Telegram?.WebApp
+  if (!wa) return false
+
+  // главный признак: initData (в браузере обычно пусто)
+  if (typeof wa.initData === 'string' && wa.initData.length > 0) return true
+
+  // fallback: по userAgent (на некоторых сборках initData может быть пустым)
+  const ua = navigator.userAgent || ''
+  return ua.includes('Telegram')
+}
+
 // Telegram WebApp (optional)
+const isTelegram = ref(false)
+
 onMounted(() => {
-  tg.value = getTg()
-  if (!tg.value) return
+  isTelegram.value = isTelegramWebApp()
+
+  if (!isTelegram.value) return
+
+  tg.value = (window as any).Telegram.WebApp
   tg.value.ready?.()
   tg.value.expand?.()
   tg.value.setHeaderColor?.('bg_color')
@@ -160,46 +178,55 @@ onMounted(() => {
 
 <template>
   <div class="app">
-    <header class="header">
-      <img class='gerb' src="./assets/gerb.png" alt="">
-      <h1 class="title">Выбери, какой сервис<br> заблокируют следующим</h1>
-      <p class="subtitle">Дамы и господа, да начнется 74 пакет блокировок… выиграет сильнейший и пусть удача всегда
-        будет на вашей стороне!</p>
-    </header>
+    <template v-if="isTelegram">
+      <header class="header">
+        <img class="gerb" src="./assets/gerb.png" alt="">
+        <h1 class="title">Выбери, какой сервис<br> заблокируют следующим</h1>
+        <p class="subtitle">
+          Дамы и господа, да начнется 74 пакет блокировок… выиграет сильнейший и пусть удача всегда будет на вашей
+          стороне!
+        </p>
+      </header>
 
+      <section class="slider">
+        <div class="viewport">
+          <div class="pointer" aria-hidden="true"></div>
 
-    <section class="slider">
-      <div class="viewport">
-        <div class="pointer" aria-hidden="true"></div>
+          <Swiper class="swiper" :loop="false" :centered-slides="true" :slides-per-view="3" :space-between="12"
+            :allow-touch-move="false" :speed="duration" @swiper="onSwiperInit">
+            <SwiperSlide v-for="(item, i) in bigList" :key="`${item.id}-${i}`">
+              <div class="card">
+                <img class="logo" :src="item.logo" :alt="item.title" />
+                <div class="label">{{ item.title }}</div>
+              </div>
+            </SwiperSlide>
+          </Swiper>
 
+          <div class="fade left" aria-hidden="true"></div>
+          <div class="fade right" aria-hidden="true"></div>
+        </div>
+      </section>
 
+      <section class="actions">
+        <button class="spin" type="button" @click="spin" :disabled="isSpinning || !isReady">
+          <span>{{ !isReady ? 'Загрузка...' : isSpinning ? 'Крутится...' : 'Крутить' }}</span>
+        </button>
+      </section>
 
-        <Swiper class="swiper" :loop="false" :centered-slides="true" :slides-per-view="3" :space-between="12"
-          :allow-touch-move="false" :speed="duration" @swiper="onSwiperInit">
-          <SwiperSlide v-for="(item, i) in bigList" :key="`${item.id}-${i}`">
-            <div class="card">
-              <img class="logo" :src="item.logo" :alt="item.title" />
-              <div class="label">{{ item.title }}</div>
-            </div>
-          </SwiperSlide>
-        </Swiper>
+      <PickActionModal :open="showPickModal" :service="picked" @close="closePick" @pick="onPickAction" />
 
-        <div class="fade left" aria-hidden="true"></div>
-        <div class="fade right" aria-hidden="true"></div>
+      <ResultModal :open="showResultModal" :service="picked" :actionText="actionText" @close="closeResult" />
+    </template>
+
+    <template v-else>
+      <div class="stub">
+        <img class="gerb" src="./assets/gerb.png" alt="">
+        <h1 class="title">Открой в Telegram</h1>
+        <p class="subtitle">
+          Это Telegram Mini App. Открой ссылку через бота/кнопку внутри Telegram.
+        </p>
       </div>
-    </section>
-
-    <section class="actions">
-      <button class="spin" type="button" @click="spin" :disabled="isSpinning || !isReady">
-        <span>
-          {{ !isReady ? 'Загрузка...' : isSpinning ? 'Крутится...' : 'Крутить' }}
-        </span>
-      </button>
-    </section>
-
-    <PickActionModal :open="showPickModal" :service="picked" @close="closePick" @pick="onPickAction" />
-
-    <ResultModal :open="showResultModal" :service="picked" :actionText="actionText" @close="closeResult" />
+    </template>
   </div>
 </template>
 
@@ -364,5 +391,13 @@ onMounted(() => {
 
 .spin:disabled {
   opacity: .7;
+}
+
+.stub {
+  min-height: 60vh;
+  display: grid;
+  align-content: center;
+  gap: 14px;
+  text-align: center;
 }
 </style>
