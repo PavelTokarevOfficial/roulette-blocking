@@ -1,0 +1,18 @@
+const services = ref<Service[]>([
+  { id: 'youtube', title: 'YouTube', logo: new URL('./assets/service-logo-1.jpg', import.meta.url).toString() },
+  { id: 'whatsapp', title: 'WhatsApp', logo: new URL('./assets/service-logo-2.jpg', import.meta.url).toString() },
+  { id: 'telegram', title: 'Telegram', logo: new URL('./assets/service-logo-3.jpg', import.meta.url).toString() },
+  { id: 'tiktok', title: 'TikTok', logo: new URL('./assets/service-logo-4.jpg', import.meta.url).toString() },
+  { id: 'spotify', title: 'Spotify', logo: new URL('./assets/service-logo-5.jpg', import.meta.url).toString() },
+  { id: 'netflix', title: 'Netflix', logo: new URL('./assets/service-logo-6.jpg', import.meta.url).toString() },
+  { id: 'reddit', title: 'Reddit', logo: new URL('./assets/service-logo-7.jpg', import.meta.url).toString() },
+  { id: 'pinterest', title: 'Pinterest', logo: new URL('./assets/service-logo-8.jpg', import.meta.url).toString() },
+  { id: 'linkedin', title: 'LinkedIn', logo: new URL('./assets/service-logo-9.jpg', import.meta.url).toString() },
+  { id: 'x', title: 'X', logo: new URL('./assets/service-logo-10.jpg', import.meta.url).toString() },
+  { id: 'dropbox', title: 'Dropbox', logo: new URL('./assets/service-logo-11.jpg', import.meta.url).toString() },
+  { id: 'zoom', title: 'Zoom', logo: new URL('./assets/service-logo-12.jpg', import.meta.url).toString() },
+  { id: 'twitch', title: 'Twitch', logo: new URL('./assets/service-logo-13.jpg', import.meta.url).toString() },
+  { id: 'onedrive', title: 'OneDrive', logo: new URL('./assets/service-logo-14.jpg', import.meta.url).toString() },
+  { id: 'googledrive', title: 'Google Drive', logo: new URL('./assets/service-logo-15.jpg', import.meta.url).toString() },
+  { id: 'discord', title: 'Discord', logo: new URL('./assets/service-logo-16.jpg', import.meta.url).toString() },
+])

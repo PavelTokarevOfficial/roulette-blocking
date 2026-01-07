@@ -1,15 +1,23 @@
-<!-- App.vue -->
+<!-- src/App.vue -->
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { getTg } from './tg'
+
+// Swiper
+import { Swiper, SwiperSlide } from 'swiper/vue'
+import type { Swiper as SwiperType } from 'swiper'
+import 'swiper/css'
+
+// Components
+import PickActionModal from './components/PickActionModal.vue'
+import ResultModal from './components/ResultModal.vue'
 
 type Service = { id: string; title: string; logo: string }
 type Action = 'block' | 'slow'
 
 const tg = ref<any>(null)
 
-// Логотипы из /src/assets (оставил под твои service-logo-*.jpg)
-const services = ref<Service[]>([
+const services: Service[] = [
   { id: 'youtube', title: 'YouTube', logo: new URL('./assets/service-logo-1.jpg', import.meta.url).toString() },
   { id: 'whatsapp', title: 'WhatsApp', logo: new URL('./assets/service-logo-2.jpg', import.meta.url).toString() },
   { id: 'telegram', title: 'Telegram', logo: new URL('./assets/service-logo-3.jpg', import.meta.url).toString() },
@@ -26,30 +34,79 @@ const services = ref<Service[]>([
   { id: 'onedrive', title: 'OneDrive', logo: new URL('./assets/service-logo-14.jpg', import.meta.url).toString() },
   { id: 'googledrive', title: 'Google Drive', logo: new URL('./assets/service-logo-15.jpg', import.meta.url).toString() },
   { id: 'discord', title: 'Discord', logo: new URL('./assets/service-logo-16.jpg', import.meta.url).toString() },
-])
+]
 
-// Слайдер (управляется только кнопкой "крутить")
-const index = ref(0)
+// ======= КЛЮЧЕВОЕ ИЗМЕНЕНИЕ =======
+// Делаем большой список (без loop), чтобы можно было “крутить” сколько угодно.
+const repeats = 220 // 220 * 16 = 3520 слайдов
+const duration = 5000 // длительность спина в мс
+const bigList = computed<Service[]>(() =>
+  Array.from({ length: services.length * repeats }, (_, i) => services[i % services.length]),
+)
+
+// Стартуем где-то в середине, чтобы был запас “влево/вправо”
+const startIndex = services.length * Math.floor(repeats / 2) // середина
+
+const swiper = ref<SwiperType | null>(null)
+const isReady = ref(false)
 const isSpinning = ref(false)
-
-const slideW = 96
-const gap = 12
-
-const trackX = computed(() => {
-  const x = (slideW + gap) * index.value
-  return `translateX(calc(50% - ${slideW / 2}px - ${x}px)) translateY(-50%)`
-})
-
-function clampIndex(i: number) {
-  const n = services.value.length
-  return ((i % n) + n) % n
-}
 
 function randInt(min: number, max: number) {
   return Math.floor(Math.random() * (max - min + 1)) + min
 }
 
-// Модалки
+// Нормализация позиции: если мы близко к концу огромного массива — переносим в середину (без анимации)
+// так, чтобы “реальный” сервис по центру остался тем же.
+function normalizePosition() {
+  const s = swiper.value
+  if (!s) return
+
+  const n = services.length
+  const cur = s.activeIndex
+  const real = cur % n
+
+  const safeLeft = n * 20
+  const safeRight = bigList.value.length - n * 20
+
+  if (cur < safeLeft || cur > safeRight) {
+    const next = startIndex + real
+    s.slideTo(next, 0, false)
+  }
+}
+
+// Основной спин: едем ВПЕРЕД на много шагов за 5 секунд
+function spin() {
+  const s = swiper.value
+  if (!s || !isReady.value || isSpinning.value) return
+
+  // если близко к краю - сразу нормализуем (не заметно)
+  normalizePosition()
+
+  isSpinning.value = true
+
+  const n = services.length
+
+  const loops = randInt(2, 3) // сколько кругов
+  const offset = randInt(0, n - 1) // добивка
+  const steps = loops * n + offset
+
+  const from = s.activeIndex
+  const to = from + steps
+
+  s.slideTo(to, duration, true)
+
+  window.setTimeout(() => {
+    isSpinning.value = false
+
+    const idx = s.activeIndex % n
+    openPickModal(services[idx])
+
+    // пока модалка на экране - можно спокойно нормализовать (чтобы следующий спин был всегда ок)
+    setTimeout(() => normalizePosition(), 0)
+  }, duration)
+}
+
+// ======= MODALS =======
 const showPickModal = ref(false)
 const showResultModal = ref(false)
 
@@ -67,94 +124,31 @@ function openPickModal(service: Service) {
   showPickModal.value = true
 }
 
-function openResult(action: Action) {
+function closePick() {
+  showPickModal.value = false
+}
+
+function onPickAction(action: Action) {
   pickedAction.value = action
   showPickModal.value = false
   showResultModal.value = true
 }
 
-function closeAll() {
-  showPickModal.value = false
+function closeResult() {
   showResultModal.value = false
 }
 
-// Анимация: ~5 секунд на одну "крутилку"
-function spin() {
-  if (isSpinning.value) return
-  const n = services.value.length
-  if (!n) return
-
-  isSpinning.value = true
-
-  // Настройки под ~5 сек
-  const totalMs = 5000
-  const baseDelay = 14 // стартовая скорость
-  const endDelay = 120 // финальная скорость
-  const steps = randInt(n * 6, n * 8) // сколько раз щёлкнуть
-
-  const target = clampIndex(index.value + steps)
-
-  let step = 0
-  let timer: number | null = null
-
-  const tick = () => {
-    index.value = clampIndex(index.value + 1)
-    step += 1
-
-    const t = Math.min(1, step / steps)
-    const delay = Math.round(baseDelay + (endDelay - baseDelay) * t * t) // ease-out
-
-    if (step < steps) {
-      timer = window.setTimeout(tick, delay)
-      return
-    }
-
-    index.value = target
-
-    window.setTimeout(() => {
-      isSpinning.value = false
-      openPickModal(services.value[index.value])
-    }, 220)
-  }
-
-  // Подгон длительности ближе к totalMs (простая коррекция)
-  // Если steps мало/много - эта коррекция держит около 5 сек.
-  const avgDelay = totalMs / steps
-  const k = avgDelay / ((baseDelay + endDelay) / 2)
-
-  const baseDelay2 = Math.max(8, Math.round(baseDelay * k))
-  const endDelay2 = Math.max(baseDelay2 + 20, Math.round(endDelay * k))
-
-  // переписываем стартовые значения (чтобы реально работало)
-  // (локально, без реактивности)
-  const _base = baseDelay2
-  const _end = endDelay2
-
-  step = 0
-  const tick2 = () => {
-    index.value = clampIndex(index.value + 1)
-    step += 1
-
-    const t = Math.min(1, step / steps)
-    const delay = Math.round(_base + (_end - _base) * t * t)
-
-    if (step < steps) {
-      window.setTimeout(tick2, delay)
-      return
-    }
-
-    index.value = target
-    window.setTimeout(() => {
-      isSpinning.value = false
-      openPickModal(services.value[index.value])
-    }, 220)
-  }
-
-  timer && window.clearTimeout(timer)
-  window.setTimeout(tick2, _base)
+// Swiper init
+function onSwiperInit(inst: SwiperType) {
+  swiper.value = inst
+  requestAnimationFrame(() => {
+    inst.update()
+    inst.slideTo(startIndex, 0, false)
+    isReady.value = true
+  })
 }
 
-// Telegram Mini App (опционально)
+// Telegram WebApp (optional)
 onMounted(() => {
   tg.value = getTg()
   if (!tg.value) return
@@ -167,120 +161,104 @@ onMounted(() => {
 <template>
   <div class="app">
     <header class="header">
-      <h1 class="title">Выбери, какой сервис заблокируют следующим</h1>
-      <p class="subtitle">Демо-игра. Ничего не сохраняется.</p>
+      <img class='gerb' src="./assets/gerb.png" alt="">
+      <h1 class="title">Выбери, какой сервис<br> заблокируют следующим</h1>
+      <p class="subtitle">Дамы и господа, да начнется 74 пакет блокировок… выиграет сильнейший и пусть удача всегда
+        будет на вашей стороне!</p>
     </header>
 
+
     <section class="slider">
-      <div class="viewport" :class="{ spinning: isSpinning }">
+      <div class="viewport">
         <div class="pointer" aria-hidden="true"></div>
 
-        <div class="track" :style="{ transform: trackX }">
-          <div
-            v-for="(s, i) in services"
-            :key="s.id"
-            class="card"
-            :class="{ active: i === index }"
-          >
-            <img class="logo" :src="s.logo" :alt="s.title" />
-            <div class="label">{{ s.title }}</div>
-          </div>
-        </div>
+
+
+        <Swiper class="swiper" :loop="false" :centered-slides="true" :slides-per-view="3" :space-between="12"
+          :allow-touch-move="false" :speed="duration" @swiper="onSwiperInit">
+          <SwiperSlide v-for="(item, i) in bigList" :key="`${item.id}-${i}`">
+            <div class="card">
+              <img class="logo" :src="item.logo" :alt="item.title" />
+              <div class="label">{{ item.title }}</div>
+            </div>
+          </SwiperSlide>
+        </Swiper>
+
+        <div class="fade left" aria-hidden="true"></div>
+        <div class="fade right" aria-hidden="true"></div>
       </div>
     </section>
 
     <section class="actions">
-      <button class="spin" type="button" @click="spin" :disabled="isSpinning">
-        {{ isSpinning ? 'Крутится...' : 'Крутить' }}
+      <button class="spin" type="button" @click="spin" :disabled="isSpinning || !isReady">
+        <span>
+          {{ !isReady ? 'Загрузка...' : isSpinning ? 'Крутится...' : 'Крутить' }}
+        </span>
       </button>
     </section>
 
-    <!-- Модалки -->
-    <teleport to="body">
-      <div v-if="showPickModal || showResultModal" class="backdrop" @click.self="closeAll">
-        <!-- Модалка 1: выбор действия -->
-        <div v-if="showPickModal && picked" class="modal" role="dialog" aria-modal="true">
-          <div class="modal__top">
-            <img class="modal__logo" :src="picked.logo" :alt="picked.title" />
-            <div class="modal__title">
-              Выпало: <b>{{ picked.title }}</b>
-            </div>
-          </div>
+    <PickActionModal :open="showPickModal" :service="picked" @close="closePick" @pick="onPickAction" />
 
-          <div class="modal__text">Что делаем?</div>
-
-          <div class="modal__buttons">
-            <button class="btn danger" type="button" @click="openResult('block')">Заблокировать</button>
-            <button class="btn warn" type="button" @click="openResult('slow')">Замедлить</button>
-          </div>
-
-          <button class="close" type="button" @click="closeAll" aria-label="Закрыть">×</button>
-        </div>
-
-        <!-- Модалка 2: результат -->
-        <div v-if="showResultModal && picked" class="modal" role="dialog" aria-modal="true">
-          <div class="modal__top">
-            <img class="modal__logo" :src="picked.logo" :alt="picked.title" />
-            <div class="modal__title">
-              <b>{{ picked.title }}</b> {{ actionText }}
-            </div>
-          </div>
-
-          <div class="result">
-            <div class="result__emoji">🎉🥳🎊</div>
-            <div class="result__text">
-              {{ picked.title }} {{ actionText }}!
-            </div>
-          </div>
-
-          <div class="modal__buttons">
-            <button class="btn" type="button" @click="closeAll">Ок</button>
-            <button class="btn" type="button" @click="closeAll; spin()" :disabled="isSpinning">Ещё раз</button>
-          </div>
-
-          <button class="close" type="button" @click="closeAll" aria-label="Закрыть">×</button>
-        </div>
-      </div>
-    </teleport>
+    <ResultModal :open="showResultModal" :service="picked" :actionText="actionText" @close="closeResult" />
   </div>
 </template>
 
 <style scoped>
-.app{
+.app {
   min-height: 100vh;
   padding: 16px;
-  background: #ffea00;
-  color: #000;
+  background: #101010;
+  color: #fff;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
 }
 
-.header{ margin-bottom: 14px; }
-.title{
-  font-size: 18px;
+.header {
+  margin-bottom: 30px;
+}
+
+.gerb {
+  display: block;
+  width: 100%;
+  max-width: 70px;
+  margin: 0 auto 20px;
+}
+
+.title {
+  font-size: 24px;
   line-height: 1.2;
-  margin: 0 0 6px;
+  font-weight: 800;
+  margin: 0 0 20px;
+  text-align: center;
 }
-.subtitle{
+
+.subtitle {
   margin: 0;
-  font-size: 12px;
+  font-size: 14px;
+  font-weight: 500;
   opacity: .75;
+  text-align: center;
+  max-width: 270px;
+  margin: 0 auto;
 }
 
-.slider{ margin: 14px 0 10px; }
+.slider {
+  margin: 14px 0 10px;
+}
 
-.viewport{
+.viewport {
   position: relative;
   overflow: hidden;
-  border: 1px solid rgba(0,0,0,.25);
   border-radius: 14px;
-  background: rgba(255,255,255,.45);
-  height: 140px;
-
-  /* нельзя крутить руками */
+  background: rgba(255, 255, 255, 0.166);
+  height: 160px;
   user-select: none;
-  pointer-events: none;
+  border-top: 3px solid red;
+  border-bottom: 3px solid red;
 }
 
-.pointer{
+.pointer {
   position: absolute;
   left: 50%;
   top: 0;
@@ -289,178 +267,102 @@ onMounted(() => {
   height: 0;
   border-left: 10px solid transparent;
   border-right: 10px solid transparent;
-  border-top: 12px solid rgba(0,0,0,.6);
-  z-index: 2;
+  border-top: 12px solid rgb(255, 0, 0);
+  z-index: 5;
 }
 
-.track{
-  position: absolute;
-  left: 0;
-  top: 50%;
-  transform: translateY(-50%);
-  display: flex;
-  gap: 12px;
-  padding: 14px 16px;
-  will-change: transform;
-  transition: transform 140ms linear;
+.swiper {
+  height: 160px;
+  padding: 18px 10px 14px;
 }
 
-/* во время крутилки чуть быстрее визуально щёлкает */
-.viewport.spinning .track{
-  transition: transform 90ms linear;
-}
-
-.card{
-  width: 96px;
-  flex: 0 0 96px;
-  border: 1px solid rgba(0,0,0,.2);
+.card {
+  width: 110px;
+  margin: 0 auto;
   border-radius: 14px;
-  background: rgba(255,255,255,.7);
+  background: rgba(255, 255, 255, .7);
   padding: 10px;
   display: grid;
   gap: 8px;
-  align-content: start;
   text-align: center;
+  transform: scale(.92);
+  transition: transform 180ms ease, background 180ms ease;
+  color: #000;
 }
 
-.card.active{
-  outline: 3px solid rgba(0,0,0,.75);
-  background: rgba(255,255,255,.9);
+:deep(.swiper-slide-active) .card {
+  transform: scale(1);
+  background: rgba(255, 255, 255, .92);
+  outline: 3px solid rgba(255, 0, 0, 0.75);
 }
 
-.logo{
+.logo {
   width: 100%;
   height: 64px;
   object-fit: contain;
   border-radius: 10px;
-  background: rgba(0,0,0,.04);
+  background: rgba(0, 0, 0, .04);
 }
 
-.label{
+.label {
   font-size: 12px;
   font-weight: 700;
 }
 
-.actions{
+.fade {
+  position: absolute;
+  top: 0;
+  width: 56px;
+  height: 100%;
+  z-index: 4;
+  pointer-events: none;
+}
+
+.fade.left {
+  left: 0;
+  background: linear-gradient(to right, rgb(16, 16, 16), rgba(255, 234, 0, 0));
+}
+
+.fade.right {
+  right: 0;
+  background: linear-gradient(to left, rgb(16, 16, 16), rgba(255, 234, 0, 0));
+}
+
+.actions {
   display: flex;
   justify-content: center;
   margin-top: 12px;
 }
 
-.spin{
+.spin {
+  position: relative;
   width: 100%;
   max-width: 360px;
   height: 44px;
-  border: 1px solid rgba(0,0,0,.35);
-  background: #000;
-  color: #fff;
+  border: none;
+  color: #ffffff;
   border-radius: 14px;
   font-weight: 800;
+  overflow: hidden;
 }
 
-.spin:disabled{ opacity: .7; }
-
-.backdrop{
-  position: fixed;
-  inset: 0;
-  background: rgba(0,0,0,.45);
-  display: grid;
-  place-items: center;
-  padding: 16px;
-  z-index: 9999;
-}
-
-.modal{
-  width: min(420px, 100%);
-  background: #fff;
-  color: #000;
-  border-radius: 18px;
-  padding: 16px;
+.spin span {
   position: relative;
-  border: 1px solid rgba(0,0,0,.2);
+  z-index: 3;
 }
 
-.modal__top{
-  display: grid;
-  grid-template-columns: 56px 1fr;
-  gap: 12px;
-  align-items: center;
-  margin-bottom: 10px;
-}
-
-.modal__logo{
-  width: 56px;
-  height: 56px;
-  object-fit: contain;
-  border-radius: 14px;
-  background: rgba(0,0,0,.04);
-  border: 1px solid rgba(0,0,0,.08);
-}
-
-.modal__title{
-  font-size: 14px;
-  line-height: 1.2;
-}
-
-.modal__text{
-  font-size: 13px;
-  opacity: .85;
-  margin-bottom: 12px;
-}
-
-.modal__buttons{
-  display: grid;
-  gap: 10px;
-  grid-template-columns: 1fr;
-}
-
-.btn{
-  height: 42px;
-  border-radius: 14px;
-  border: 1px solid rgba(0,0,0,.25);
-  background: rgba(0,0,0,.06);
-  font-weight: 800;
-}
-
-.btn.danger{
-  background: #ff3b30;
-  color: #fff;
-  border-color: rgba(0,0,0,.15);
-}
-
-.btn.warn{
-  background: #ffcc00;
-  color: #000;
-}
-
-.close{
+.spin::before {
+  content: "";
   position: absolute;
-  top: 10px;
-  right: 10px;
-  width: 34px;
-  height: 34px;
-  border-radius: 12px;
-  border: 1px solid rgba(0,0,0,.2);
-  background: rgba(0,0,0,.06);
-  font-size: 20px;
-  line-height: 1;
+  background: url('./assets/flag.jpg') no-repeat center center;
+  transform: rotate(45deg);
+  top: -70px;
+  left: -70px;
+  width: 600px;
+  height: 300px;
 }
 
-.result{
-  margin: 10px 0 14px;
-  padding: 12px;
-  border-radius: 14px;
-  background: rgba(0,0,0,.06);
-  text-align: center;
-}
-
-.result__emoji{
-  font-size: 26px;
-  margin-bottom: 6px;
-}
-
-.result__text{
-  font-size: 14px;
-  font-weight: 800;
+.spin:disabled {
+  opacity: .7;
 }
 </style>
