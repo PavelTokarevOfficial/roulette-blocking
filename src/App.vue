@@ -16,6 +16,7 @@ type Service = { id: string; title: string; logo: string }
 type Action = 'block' | 'slow'
 
 const tg = ref<any>(null)
+const appVersion = __APP_VERSION__
 
 const services: Service[] = [
   { id: 'youtube', title: 'YouTube', logo: new URL('./assets/service-logo-1.jpg', import.meta.url).toString() },
@@ -229,6 +230,7 @@ onMounted(() => {
       </div>
     </template>
   </div>
+  <div class="version">v{{ appVersion }}</div>
 </template>
 
 <style scoped>
@@ -400,5 +402,15 @@ onMounted(() => {
   align-content: center;
   gap: 14px;
   text-align: center;
+}
+
+.version{
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: 15px;
+  font-size: 11px;
+  color: #fff;
+  opacity: .45;
 }
 </style>
