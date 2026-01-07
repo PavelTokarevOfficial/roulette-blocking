@@ -39,7 +39,7 @@ const services: Service[] = [
 // ======= КЛЮЧЕВОЕ ИЗМЕНЕНИЕ =======
 // Делаем большой список (без loop), чтобы можно было “крутить” сколько угодно.
 const repeats = 220 // 220 * 16 = 3520 слайдов
-const duration = 5000 // длительность спина в мс
+const duration = 10000 // длительность спина в мс
 const bigList = computed<Service[]>(() =>
   Array.from({ length: services.length * repeats }, (_, i) => services[i % services.length]),
 )
@@ -165,14 +165,15 @@ function isTelegramWebApp() {
 const isTelegram = ref(false)
 
 onMounted(() => {
-  isTelegram.value = isTelegramWebApp()
+  const devBypass = import.meta.env.DEV && import.meta.env.VITE_TG_DEV === '1'
+  isTelegram.value = isTelegramWebApp() || devBypass
 
   if (!isTelegram.value) return
 
-  tg.value = (window as any).Telegram.WebApp
-  tg.value.ready?.()
-  tg.value.expand?.()
-  tg.value.setHeaderColor?.('bg_color')
+  tg.value = (window as any).Telegram?.WebApp
+  tg.value?.ready?.()
+  tg.value?.expand?.()
+  tg.value?.setHeaderColor?.('bg_color')
 })
 </script>
 

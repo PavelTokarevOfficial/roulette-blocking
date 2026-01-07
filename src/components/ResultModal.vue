@@ -100,5 +100,6 @@ const visible = computed(() => props.open && !!props.service)
     background: rgba(0, 0, 0, .06);
     font-weight: 800;
     font-size: 16px;
+    color: #000;
 }
 </style>
